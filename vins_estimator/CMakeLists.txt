@@ -40,3 +40,14 @@ target_link_libraries(vins_lib ${OpenCV_LIBS} ${CERES_LIBRARIES})
 
 add_executable(vins_fusion src/main.cpp)
 target_link_libraries(vins_fusion vins_lib)
+
+# install vins_lib library (libvins_lib.so)
+install(TARGETS vins_lib
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
+)
+
+install(TARGETS vins_fusion
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
