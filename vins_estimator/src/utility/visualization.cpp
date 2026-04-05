@@ -29,7 +29,7 @@ static struct sockaddr_un chobits_addr, chobits_local_addr;
 static int chobits_sock;
 
 /* ── per-type UDP sequence counters ─────────────────────────────────────── */
-static uint16_t g_seq[6] = {0};
+static uint16_t g_seq[UDP_TYPE_IMAGE_CHUNK + 1] = {};
 
 /* ── thread-safe latest-image buffer ────────────────────────────────────── */
 struct LatestImage {
@@ -396,9 +396,11 @@ void pubKeyframeImage(double kf_stamp)
      * receiver can reassemble them. */
     uint16_t img_seq = g_seq[UDP_TYPE_IMAGE_CHUNK]++;
 
-    /* Scratch buffer large enough for one full packet. */
-    static uint8_t pkt_buf[sizeof(UdpHeader) + sizeof(UdpImageChunkHeader)
-                            + UDP_IMG_CHUNK_PAYLOAD];
+    /* Scratch buffer large enough for one full packet (stack-allocated,
+     * safe because pubKeyframeImage is only called from the estimator
+     * processing thread). */
+    uint8_t pkt_buf[sizeof(UdpHeader) + sizeof(UdpImageChunkHeader)
+                    + UDP_IMG_CHUNK_PAYLOAD];
 
     for (uint32_t ci = 0; ci < total_chunks; ci++)
     {

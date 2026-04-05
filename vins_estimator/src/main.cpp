@@ -203,7 +203,10 @@ int main(int argc, char **argv)
                      *  [20..23]  uint32_t payload_bytes
                      */
                     double   stamp;
-                    uint32_t width, height, encoding, payload_bytes;
+                    uint32_t width;
+                    uint32_t height;
+                    uint32_t encoding;
+                    uint32_t payload_bytes;
                     const uint8_t *hp = image_buf;
                     memcpy(&stamp,         hp,      sizeof(double));   hp += 8;
                     memcpy(&width,         hp,      sizeof(uint32_t)); hp += 4;
