@@ -300,6 +300,20 @@ void Estimator::processMeasurements()
 
             pubOdometry(*this);
 
+            /* Publish extrinsic every iteration (cheap, needed by loop_fusion). */
+            pubExtrinsic(*this);
+
+            /* Publish keyframe data when a new keyframe is committed
+             * (solver converged and oldest frame is being marginalised). */
+            if (solver_flag == NON_LINEAR
+                && marginalization_flag == MARGIN_OLD)
+            {
+                pubKeyframePose(*this);
+                pubKeyframePoint(*this);
+                pubKeyframeImage(Headers[WINDOW_SIZE - 2]);
+                pubMarginCloud(*this);
+            }
+
             //mProcess.unlock();
         }
 
