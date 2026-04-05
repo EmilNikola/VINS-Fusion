@@ -9,10 +9,9 @@
 
 #pragma once
 
-#include <ros/ros.h>
-#include <std_msgs/ColorRGBA.h>
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <cstdint>
+#include <string>
+#include <vector>
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <opencv2/opencv.hpp>
@@ -22,8 +21,38 @@ class CameraPoseVisualization {
 public:
 	std::string m_marker_ns;
 
+	// ROS-less marker model (enough to keep current functionality)
+	struct ColorRGBA {
+		float r = 0.f;
+		float g = 0.f;
+		float b = 0.f;
+		float a = 1.f;
+	};
+	struct Point {
+		double x = 0.0;
+		double y = 0.0;
+		double z = 0.0;
+	};
+	struct Marker {
+		enum class Type : std::uint8_t {
+			LINE_LIST = 0,
+			LINE_STRIP = 1,
+		};
+
+		std::string ns;
+		int id = 0;
+		Type type = Type::LINE_STRIP;
+		double scale_x = 0.01; // line width
+
+		// Either use per-point colors (same length as points) or a single uniform color.
+		bool use_per_point_color = true;
+		ColorRGBA color{};
+		std::vector<Point> points;
+		std::vector<ColorRGBA> colors;
+	};
+
 	CameraPoseVisualization(float r, float g, float b, float a);
-	
+    
 	void setImageBoundaryColor(float r, float g, float b, float a=1.0);
 	void setOpticalCenterConnectorColor(float r, float g, float b, float a=1.0);
 	void setScale(double s);
@@ -32,20 +61,25 @@ public:
 	void add_pose(const Eigen::Vector3d& p, const Eigen::Quaterniond& q);
 	void reset();
 
-	void publish_by(ros::Publisher& pub, const std_msgs::Header& header);
+	// Replacement for ROS publish:
+	// - getMarkers(): inspect current markers (camera frustums + edges)
+	// - consumeMarkers(): move them out and clear internal list
+	const std::vector<Marker>& getMarkers() const;
+	std::vector<Marker> consumeMarkers();
+
 	void add_edge(const Eigen::Vector3d& p0, const Eigen::Vector3d& p1);
 	void add_loopedge(const Eigen::Vector3d& p0, const Eigen::Vector3d& p1);
-	//void add_image(const Eigen::Vector3d& T, const Eigen::Matrix3d& R, const cv::Mat &src);
-	void publish_image_by( ros::Publisher &pub, const std_msgs::Header &header);
+
 private:
-	std::vector<visualization_msgs::Marker> m_markers;
-	std_msgs::ColorRGBA m_image_boundary_color;
-	std_msgs::ColorRGBA m_optical_center_connector_color;
 	double m_scale;
 	double m_line_width;
-	visualization_msgs::Marker image;
 	int LOOP_EDGE_NUM;
 	int tmp_loop_edge_num;
+
+	std::vector<Marker> m_markers;
+	ColorRGBA m_image_boundary_color;
+	ColorRGBA m_optical_center_connector_color;
+	Marker image; // kept for parity (currently unused in your .cpp)
 
 	static const Eigen::Vector3d imlt;
 	static const Eigen::Vector3d imlb;

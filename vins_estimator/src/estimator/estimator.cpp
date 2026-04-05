@@ -298,7 +298,16 @@ void Estimator::processMeasurements()
                 cout << "pose est cost " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_ts).count() << " ms\n";
             }
 
+            // Continuous output
             pubOdometry(*this);
+
+            // Loop-fusion-related outputs over UDP (loop_fusion will be modified later to decode).
+            // This mirrors original ROS keyframe publishing conditions/content.
+            pubKeyframeUdp(*this);
+
+            // Extrinsic over UDP (republished at image/feature time for simplicity).
+            // If you prefer, you can rate-limit this later.
+            pubExtrinsicUdp(*this, feature.first);
 
             //mProcess.unlock();
         }

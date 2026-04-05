@@ -14,6 +14,7 @@
 #include <map>
 #include <thread>
 #include <mutex>
+#include <cstring>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <poll.h>
@@ -44,6 +45,7 @@ int main(int argc, char **argv)
     int imu_sock, features_sock;
     struct sockaddr_un ipc_addr;
     if ((imu_sock = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0) {
+        perror("socket imu_sock failed");
         return 1;
     }
     memset(&ipc_addr, 0, sizeof(ipc_addr));
@@ -51,11 +53,12 @@ int main(int argc, char **argv)
     strcpy(ipc_addr.sun_path, IMU_SOCK_PATH);
     unlink(IMU_SOCK_PATH);
     if (bind(imu_sock, (const struct sockaddr *)&ipc_addr, sizeof(ipc_addr)) < 0) {
-        printf("bind local failed\n");
+        perror("bind imu_sock failed");
         return 1;
     }
 
     if ((features_sock = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0) {
+        perror("socket features_sock failed");
         return 1;
     }
     memset(&ipc_addr, 0, sizeof(ipc_addr));
@@ -63,18 +66,22 @@ int main(int argc, char **argv)
     strcpy(ipc_addr.sun_path, FEATURES_SOCK_PATH);
     unlink(FEATURES_SOCK_PATH);
     if (bind(features_sock, (const struct sockaddr *)&ipc_addr, sizeof(ipc_addr)) < 0) {
-        printf("bind local failed\n");
+        perror("bind features_sock failed");
         return 1;
     }
 
     struct sockaddr_in srv_addr;
     pub_sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (pub_sock < 0) {
+        perror("socket pub_sock failed");
+        return 1;
+    }
     memset(&srv_addr, 0, sizeof(srv_addr));
     srv_addr.sin_family = AF_INET;
     srv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     srv_addr.sin_port = htons(8800);
     if (bind(pub_sock, (const struct sockaddr *)&srv_addr, sizeof(srv_addr)) < 0 ) {
-        perror("bind failed");
+        perror("bind pub_sock (udp 8800) failed");
     }
     memset(&pub_addr, 0, sizeof(pub_addr));
 
@@ -141,10 +148,11 @@ int main(int argc, char **argv)
                 }
             }
             if (pfds[2].revents & POLLIN) {
+                // Any incoming UDP packet registers the client address for outgoing UDP packets.
+                // We don't care about the payload yet; we only need pub_addr.
                 socklen_t addrlen = sizeof(struct sockaddr_in);
-                if (recvfrom(pub_sock, buf, 8, 0, (struct sockaddr*)&pub_addr, &addrlen) > 0) {
-                    printf("debug client inc\n");
-                }
+                if (recvfrom(pub_sock, buf, 8, 0, (struct sockaddr*)&pub_addr, &addrlen) > 0)
+                    printf("debug client inc: %s:%d\n", inet_ntoa(pub_addr.sin_addr), ntohs(pub_addr.sin_port));
             }
         } else break;
     }
@@ -153,6 +161,10 @@ int main(int argc, char **argv)
 
     unlink(IMU_SOCK_PATH);
     unlink(FEATURES_SOCK_PATH);
+
+    close(imu_sock);
+    close(features_sock);
+    close(pub_sock);
 
     printf("bye\n");
 

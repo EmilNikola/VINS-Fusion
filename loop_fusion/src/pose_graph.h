@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <thread>
 #include <mutex>
 #include <opencv2/opencv.hpp>
@@ -20,11 +21,7 @@
 #include <ceres/rotation.h>
 #include <queue>
 #include <assert.h>
-#include <nav_msgs/Path.h>
-#include <geometry_msgs/PointStamped.h>
-#include <nav_msgs/Odometry.h>
 #include <stdio.h>
-#include <ros/ros.h>
 #include "keyframe.h"
 #include "utility/tic_toc.h"
 #include "utility/utility.h"
@@ -46,20 +43,29 @@ using namespace DBoW2;
 class PoseGraph
 {
 public:
+	struct Pose
+	{
+		double stamp = 0.0;
+		Eigen::Vector3d p = Eigen::Vector3d::Zero();
+		Eigen::Quaterniond q = Eigen::Quaterniond::Identity();
+	};
 	PoseGraph();
 	~PoseGraph();
-	void registerPub(ros::NodeHandle &n);
 	void addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop);
 	void loadKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop);
 	void loadVocabulary(std::string voc_path);
 	void setIMUFlag(bool _use_imu);
 	KeyFrame* getKeyFrame(int index);
-	nav_msgs::Path path[10];
-	nav_msgs::Path base_path;
+	// ROS-less paths (same data as nav_msgs::Path would have carried)
+	std::vector<Pose> path[10];
+	std::vector<Pose> base_path;
 	CameraPoseVisualization* posegraph_visualization;
 	void savePoseGraph();
 	void loadPoseGraph();
-	void publish();
+
+	// ROS-less "publish": exposes accumulated visualization markers since last consume.
+	// Caller can render/send/store them.
+	std::vector<CameraPoseVisualization::Marker> consumeVisualizationMarkers();
 	Vector3d t_drift;
 	double yaw_drift;
 	Matrix3d r_drift;
@@ -93,10 +99,8 @@ private:
 	BriefDatabase db;
 	BriefVocabulary* voc;
 
-	ros::Publisher pub_pg_path;
-	ros::Publisher pub_base_path;
-	ros::Publisher pub_pose_graph;
-	ros::Publisher pub_path[10];
+	// ROS publishers removed; visualization and paths are exposed via
+	// consumeVisualizationMarkers() and path/base_path members.
 };
 
 template <typename T> inline
