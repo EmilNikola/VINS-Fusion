@@ -376,12 +376,12 @@ static void processLoop(bool require_image)
         }
 
         if (skip_cnt < SKIP_CNT) {
-            skip_cnt++;
-            continue;
-        } else {
-            skip_cnt = 0;
-        }
-
+            {
+                std::lock_guard<std::mutex> lk(m_buf);
+                if (pose_buf.empty() || points_buf.empty())
+                    return false;
+                if (image_buf.empty())
+                    return false;
         Eigen::Vector3d T = pose.t;
         Eigen::Matrix3d R = pose.q.toRotationMatrix();
 
@@ -543,32 +543,25 @@ int main(int argc, char **argv)
         }
     });
 
-    // Optional image receiver
-    const bool require_image = true;
-    int vfrm_sock = -1;
-    if (require_image) {
-        vfrm_sock = createUnixDgramSocketBound(local_vfrm_path);
-        if (vfrm_sock < 0) {
-            fprintf(stderr, "failed to bind VFRM unix socket %s\n", local_vfrm_path);
-            return 1;
-        }
-        printf("listening VFRM on unix dgram %s\n", local_vfrm_path);
+    // Image receiver is mandatory
+    int vfrm_sock = createUnixDgramSocketBound(local_vfrm_path);
+    if (vfrm_sock < 0) {
+        fprintf(stderr, "failed to bind VFRM unix socket %s\n", local_vfrm_path);
+        return 1;
     }
+    printf("listening VFRM on unix dgram %s\n", local_vfrm_path);
     printf("listening VINS on udp %d\n", local_vins_port);
 
     std::thread t_vins(udpReceiverVins, vins_sock);
-    std::thread t_vfrm;
-    if (require_image)
-        t_vfrm = std::thread(unixReceiverVfrm, vfrm_sock);
+    std::thread t_vfrm(unixReceiverVfrm, vfrm_sock);
 
-    std::thread t_process(processLoop, require_image);
+    std::thread t_process(processLoop);
     std::thread t_cmd(commandThread);
 
     t_cmd.join();
     running.store(false);
 
-    if (t_ping.joinable())
-        t_ping.join();
+    if (t_ping.joinable()) t_ping.join();
 
     // allow receiver threads to exit
     shutdown(vins_sock, SHUT_RDWR);
