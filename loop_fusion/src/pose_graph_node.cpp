@@ -475,21 +475,34 @@ int main(int argc, char **argv)
     ROW = (int)fsSettings["image_height"];
     COL = (int)fsSettings["image_width"];
 
-    // Find support_files relative to repo layout:
-    // config/.../xxx.yaml -> repo_root/config/.../xxx.yaml
-    // so repo_root = path prefix up to /config
-    std::string repo_root;
+    // Prefer explicit absolute paths from config (Nix-friendly).
+    // Fallback to old heuristic if not provided.
+    std::string vocabulary_file;
+    std::string brief_pattern_file;
+    fsSettings["brief_vocabulary_file"] >> vocabulary_file;
+    fsSettings["brief_pattern_file"] >> brief_pattern_file;
+
+    if (vocabulary_file.empty() || brief_pattern_file.empty())
     {
+        // Find support_files relative to repo layout:
+        // config/.../xxx.yaml -> repo_root/config/.../xxx.yaml
+        // so repo_root = path prefix up to /config
+        std::string repo_root;
         auto pos = config_file.find("/config/");
         if (pos != std::string::npos) repo_root = config_file.substr(0, pos);
-        else {
-            // fallback: assume current working directory is repo root
-            repo_root = ".";
-        }
+        else repo_root = ".";
+
+        if (vocabulary_file.empty())
+            vocabulary_file = repo_root + "/support_files/brief_k10L6.bin";
+        if (brief_pattern_file.empty())
+            brief_pattern_file = repo_root + "/support_files/brief_pattern.yml";
     }
-    std::string vocabulary_file = repo_root + "/support_files/brief_k10L6.bin";
+
+    std::cout << "brief_vocabulary_file: " << vocabulary_file << std::endl;
+    std::cout << "brief_pattern_file: " << brief_pattern_file << std::endl;
+
     posegraph.loadVocabulary(vocabulary_file);
-    BRIEF_PATTERN_FILE = repo_root + "/support_files/brief_pattern.yml";
+    BRIEF_PATTERN_FILE = brief_pattern_file;
 
     int pn = (int)config_file.find_last_of('/');
     std::string configPath = config_file.substr(0, pn);
