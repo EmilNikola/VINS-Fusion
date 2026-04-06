@@ -23,6 +23,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <sys/un.h>
 
 #include <eigen3/Eigen/Dense>
 #include <opencv2/opencv.hpp>
@@ -254,7 +255,7 @@ static void udpReceiverVins(int sock)
     }
 }
 
-static void udpReceiverVfrm(int sock)
+static void unixReceiverVfrm(int sock)
 {
     std::vector<uint8_t> buf;
     buf.resize(65536);
@@ -289,6 +290,28 @@ static void udpReceiverVfrm(int sock)
         std::lock_guard<std::mutex> lk(m_buf);
         image_buf.push(std::move(im));
     }
+}
+
+static int createUnixDgramSocketBound(const char* path)
+{
+    int s = ::socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (s < 0) {
+        perror("socket(AF_UNIX)");
+        return -1;
+    }
+
+    // Remove old socket file if present
+    ::unlink(path);
+
+    sockaddr_un addr{};
+    addr.sun_family = AF_UNIX;
+    std::snprintf(addr.sun_path, sizeof(addr.sun_path), "%s", path);
+    if (bind(s, (sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("bind(AF_UNIX)");
+        close(s);
+        return -1;
+    }
+    return s;
 }
 
 static bool tryPopSynced(double &stamp, PoseMsg &pose, PointsMsg &pts, ImageMsg &img, bool require_image)
@@ -505,7 +528,7 @@ int main(int argc, char **argv)
     const std::string estimator_ip = "127.0.0.1";
     const int estimator_port = 8800;  // estimator bind port
     const int local_vins_port = 8801; // loop_fusion receives VINS packets here
-    const int local_vfrm_port = 8802; // optional VFRM image packets here
+    const char* local_vfrm_path = "/tmp/chobits_frames"; // VFRM frames from camera program (AF_UNIX DGRAM)
 
     int vins_sock = createUdpSocketBound(local_vins_port);
     if (vins_sock < 0) return 1;
@@ -524,19 +547,19 @@ int main(int argc, char **argv)
     const bool require_image = true;
     int vfrm_sock = -1;
     if (require_image) {
-        vfrm_sock = createUdpSocketBound(local_vfrm_port);
+        vfrm_sock = createUnixDgramSocketBound(local_vfrm_path);
         if (vfrm_sock < 0) {
-            fprintf(stderr, "failed to bind VFRM port %d\n", local_vfrm_port);
+            fprintf(stderr, "failed to bind VFRM unix socket %s\n", local_vfrm_path);
             return 1;
         }
-        printf("listening VFRM on udp %d\n", local_vfrm_port);
+        printf("listening VFRM on unix dgram %s\n", local_vfrm_path);
     }
     printf("listening VINS on udp %d\n", local_vins_port);
 
     std::thread t_vins(udpReceiverVins, vins_sock);
     std::thread t_vfrm;
     if (require_image)
-        t_vfrm = std::thread(udpReceiverVfrm, vfrm_sock);
+        t_vfrm = std::thread(unixReceiverVfrm, vfrm_sock);
 
     std::thread t_process(processLoop, require_image);
     std::thread t_cmd(commandThread);
@@ -550,7 +573,12 @@ int main(int argc, char **argv)
     // allow receiver threads to exit
     shutdown(vins_sock, SHUT_RDWR);
     close(vins_sock);
-    if (vfrm_sock >= 0) { shutdown(vfrm_sock, SHUT_RDWR); close(vfrm_sock); }
+    if (vfrm_sock >= 0) {
+        // For AF_UNIX DGRAM, shutdown is optional; close is enough.
+        close(vfrm_sock);
+        // Clean up socket file so the next run can bind without issues.
+        ::unlink(local_vfrm_path);
+    }
 
     if (t_vins.joinable()) t_vins.join();
     if (t_vfrm.joinable()) t_vfrm.join();
