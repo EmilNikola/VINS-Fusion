@@ -6,14 +6,20 @@ set(CMAKE_CXX_FLAGS "-std=c++14")
 #-DEIGEN_USE_MKL_ALL")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 
-find_package(catkin REQUIRED COMPONENTS
-    roscpp
-    std_msgs
-    nav_msgs
-    camera_models
-    cv_bridge
-    roslib
+option(LOOP_FUSION_STANDALONE "Build loop_fusion without ROS/catkin" ON)
+
+if(NOT LOOP_FUSION_STANDALONE)
+    find_package(catkin REQUIRED COMPONENTS
+            roscpp
+            std_msgs
+            nav_msgs
+            camera_models
+            cv_bridge
+            roslib
     )
+    catkin_package()
+    include_directories(${catkin_INCLUDE_DIRS})
+endif()
 
 find_package(OpenCV 4)
 
@@ -23,9 +29,7 @@ find_package(Ceres REQUIRED)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(Eigen3)
 
-include_directories(${catkin_INCLUDE_DIRS} ${CERES_INCLUDE_DIRS}  ${EIGEN3_INCLUDE_DIR})
-
-catkin_package()
+include_directories(${CERES_INCLUDE_DIRS} ${EIGEN3_INCLUDE_DIR})
 
 add_executable(loop_fusion_node
     src/pose_graph_node.cpp
@@ -43,4 +47,10 @@ add_executable(loop_fusion_node
     src/ThirdParty/VocabularyBinary.cpp
     )
 
-target_link_libraries(loop_fusion_node ${catkin_LIBRARIES}  ${OpenCV_LIBS} ${CERES_LIBRARIES}) 
+if(LOOP_FUSION_STANDALONE)
+    target_link_libraries(loop_fusion_node ${OpenCV_LIBS} ${CERES_LIBRARIES})
+    install(TARGETS loop_fusion_node RUNTIME DESTINATION bin)
+else()
+    target_link_libraries(loop_fusion_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
+    install(TARGETS loop_fusion_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+endif()
