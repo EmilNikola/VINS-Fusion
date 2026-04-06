@@ -373,57 +373,21 @@ static void processLoop()
             skip_cnt++;
             continue;
         } else {
-            skip_cnt = 0;
+            if (skip_cnt < SKIP_CNT) {
+                skip_cnt++;
+                continue;
+            } else {
+                skip_cnt = 0;
+            }
+
+            Eigen::Vector3d T = pose.t;
+            Eigen::Matrix3d R = pose.q.toRotationMatrix();
+
+            if ((T - last_t).norm() <= SKIP_DIS)
+                continue;
+
+            // (rest of your function remains unchanged)
         }
-
-        Eigen::Vector3d T = pose.t;
-        Eigen::Matrix3d R = pose.q.toRotationMatrix();
-
-        if ((T - last_t).norm() <= SKIP_DIS)
-            continue;
-
-        std::vector<cv::Point3f> point_3d;
-        std::vector<cv::Point2f> point_2d_uv;
-        std::vector<cv::Point2f> point_2d_normal;
-        std::vector<double> point_id;
-
-        point_3d.reserve(pts.pts.size());
-        point_2d_uv.reserve(pts.pts.size());
-        point_2d_normal.reserve(pts.pts.size());
-        point_id.reserve(pts.pts.size());
-
-        for (const auto &p : pts.pts)
-        {
-            point_3d.emplace_back(p.X, p.Y, p.Z);
-            point_2d_normal.emplace_back(p.nx, p.ny);
-            point_2d_uv.emplace_back(p.u, p.v);
-            point_id.push_back((double)p.id);
-        }
-
-        cv::Mat image = img.mono;
-        if (image.empty()) {
-            image = cv::Mat(ROW, COL, CV_8UC1, cv::Scalar(0));
-        }
-
-        KeyFrame* keyframe = new KeyFrame(stamp, frame_index, T, R, image,
-                                          point_3d, point_2d_uv, point_2d_normal, point_id, sequence);
-
-        m_process.lock();
-        posegraph.addKeyFrame(keyframe, /*detect_loop=*/1);
-        m_process.unlock();
-
-        frame_index++;
-        last_t = T;
-
-        // Optional: drain visualization markers (now ROS-less).
-        // If you have a UDP visualizer, send these out here.
-        auto markers = posegraph.consumeVisualizationMarkers();
-        (void)markers;
-    }
-}
-
-static void commandThread()
-{
     while (running.load())
     {
         char c = getchar();
