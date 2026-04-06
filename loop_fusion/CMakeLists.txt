@@ -1,4 +1,3 @@
-```cmake name=loop_fusion/CMakeLists.txt
 cmake_minimum_required(VERSION 2.8.3)
 project(loop_fusion)
 
@@ -62,4 +61,3 @@ else()
     target_link_libraries(loop_fusion_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
     install(TARGETS loop_fusion_node RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 endif()
-```
