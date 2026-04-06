@@ -326,6 +326,11 @@ static bool tryPopSynced(double &stamp, PoseMsg &pose, PointsMsg &pts, ImageMsg 
     const double ts_pose = pose_buf.front().stamp;
     const double ts_pts  = points_buf.front().stamp;
     if (std::fabs(ts_pose - ts_pts) > 1e-6) {
+        static int warn_cnt = 0;
+        if ((warn_cnt++ % 50) == 0) {
+            std::cout << "[loop_fusion] KEYFRAME_POSE/PTS stamp mismatch: pose="
+                      << ts_pose << " pts=" << ts_pts << " dt=" << (ts_pose - ts_pts) << "\n";
+        }
         // drop older one
         if (ts_pose < ts_pts) pose_buf.pop();
         else points_buf.pop();
@@ -337,7 +342,14 @@ static bool tryPopSynced(double &stamp, PoseMsg &pose, PointsMsg &pts, ImageMsg 
         image_buf.pop();
     if (image_buf.empty())
         return false;
-    if (std::fabs(image_buf.front().stamp - ts_pose) > 0.02) {
+    // Tolerance widened: real systems often have >20ms jitter/offset between streams.
+    const double dt_img = image_buf.front().stamp - ts_pose;
+    if (std::fabs(dt_img) > 0.05) {
+        static int warn_cnt = 0;
+        if ((warn_cnt++ % 50) == 0) {
+            std::cout << "[loop_fusion] waiting for synced image: img=" << image_buf.front().stamp
+                      << " pose=" << ts_pose << " dt=" << dt_img << " (s)\n";
+        }
         // no close image yet
         return false;
     }
