@@ -314,15 +314,15 @@ static int createUnixDgramSocketBound(const char* path)
     return s;
 }
 
-static bool tryPopSynced(double &stamp, PoseMsg &pose, PointsMsg &pts, ImageMsg &img, bool require_image)
+static bool tryPopSynced(double &stamp, PoseMsg &pose, PointsMsg &pts, ImageMsg &img)
 {
     std::lock_guard<std::mutex> lk(m_buf);
     if (pose_buf.empty() || points_buf.empty())
         return false;
-    if (require_image && image_buf.empty())
+    if (image_buf.empty())
         return false;
 
-    // We assume the estimator uses the same timestamp for KEYFRAME_POSE and KEYFRAME_PTS (it does in your code).
+    // We assume the estimator uses the same timestamp for KEYFRAME_POSE and KEYFRAME_PTS.
     const double ts_pose = pose_buf.front().stamp;
     const double ts_pts  = points_buf.front().stamp;
     if (std::fabs(ts_pose - ts_pts) > 1e-6) {
@@ -332,23 +332,17 @@ static bool tryPopSynced(double &stamp, PoseMsg &pose, PointsMsg &pts, ImageMsg 
         return false;
     }
 
-    if (require_image) {
-        // Align image buffer to timestamp (best-effort).
-        while (!image_buf.empty() && image_buf.front().stamp + 1e-6 < ts_pose)
-            image_buf.pop();
-        if (image_buf.empty())
-            return false;
-        if (std::fabs(image_buf.front().stamp - ts_pose) > 0.02) {
-            // no close image yet
-            return false;
-        }
-        img = std::move(image_buf.front());
+    // Align image buffer to timestamp (best-effort).
+    while (!image_buf.empty() && image_buf.front().stamp + 1e-6 < ts_pose)
         image_buf.pop();
-    } else {
-        img = ImageMsg{};
-        img.stamp = ts_pose;
-        img.mono = cv::Mat(ROW, COL, CV_8UC1, cv::Scalar(0));
+    if (image_buf.empty())
+        return false;
+    if (std::fabs(image_buf.front().stamp - ts_pose) > 0.02) {
+        // no close image yet
+        return false;
     }
+    img = std::move(image_buf.front());
+    image_buf.pop();
 
     pose = std::move(pose_buf.front()); pose_buf.pop();
     pts  = std::move(points_buf.front()); points_buf.pop();
@@ -356,7 +350,7 @@ static bool tryPopSynced(double &stamp, PoseMsg &pose, PointsMsg &pts, ImageMsg 
     return true;
 }
 
-static void processLoop(bool require_image)
+static void processLoop()
 {
     while (running.load())
     {
@@ -364,7 +358,7 @@ static void processLoop(bool require_image)
         PoseMsg pose;
         PointsMsg pts;
         ImageMsg img;
-        if (!tryPopSynced(stamp, pose, pts, img, require_image)) {
+        if (!tryPopSynced(stamp, pose, pts, img)) {
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             continue;
         }
@@ -376,12 +370,12 @@ static void processLoop(bool require_image)
         }
 
         if (skip_cnt < SKIP_CNT) {
-            {
-                std::lock_guard<std::mutex> lk(m_buf);
-                if (pose_buf.empty() || points_buf.empty())
-                    return false;
-                if (image_buf.empty())
-                    return false;
+            skip_cnt++;
+            continue;
+        } else {
+            skip_cnt = 0;
+        }
+
         Eigen::Vector3d T = pose.t;
         Eigen::Matrix3d R = pose.q.toRotationMatrix();
 
