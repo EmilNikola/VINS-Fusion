@@ -128,7 +128,7 @@ void pubOdometry(const Estimator &estimator)
         double payload[10] = {px, py, pz, qx, qy, qz, qw, vx, vy, vz};
         // Use estimator header stamp if available
         double stamp = 0;
-        if (!estimator.Headers.empty()) stamp = estimator.Headers[WINDOW_SIZE];
+        stamp = estimator.Headers[WINDOW_SIZE];
         udpSendPacket(VINS_UDP_ODOM, stamp, 0, payload, sizeof(payload));
     }
 }
