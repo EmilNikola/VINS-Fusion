@@ -15,7 +15,6 @@
 #include "camodocal/camera_models/CataCamera.h"
 #include "camodocal/camera_models/PinholeCamera.h"
 #include <eigen3/Eigen/Dense>
-//#include <cv_bridge/cv_bridge.h> also ros
 
 extern camodocal::CameraPtr m_camera;
 extern Eigen::Vector3d tic;
