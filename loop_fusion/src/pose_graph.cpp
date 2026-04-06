@@ -34,14 +34,7 @@ PoseGraph::~PoseGraph()
     t_optimization.detach();
 }
 
-void PoseGraph::registerPub(ros::NodeHandle &n)
-{
-    pub_pg_path = n.advertise<nav_msgs::Path>("pose_graph_path", 1000);
-    pub_base_path = n.advertise<nav_msgs::Path>("base_path", 1000);
-    pub_pose_graph = n.advertise<visualization_msgs::MarkerArray>("pose_graph", 1000);
-    for (int i = 1; i < 10; i++)
-        pub_path[i] = n.advertise<nav_msgs::Path>("path_" + to_string(i), 1000);
-}
+// registerPub removed: publishing is now handled via consumeVisualizationMarkers()
 
 void PoseGraph::setIMUFlag(bool _use_imu)
 {
@@ -166,18 +159,13 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
     R = r_drift * R;
     cur_kf->updatePose(P, R);
     Quaterniond Q{R};
-    geometry_msgs::PoseStamped pose_stamped;
-    pose_stamped.header.stamp = ros::Time(cur_kf->time_stamp);
-    pose_stamped.header.frame_id = "world";
-    pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
-    pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
-    pose_stamped.pose.position.z = P.z();
-    pose_stamped.pose.orientation.x = Q.x();
-    pose_stamped.pose.orientation.y = Q.y();
-    pose_stamped.pose.orientation.z = Q.z();
-    pose_stamped.pose.orientation.w = Q.w();
-    path[sequence_cnt].poses.push_back(pose_stamped);
-    path[sequence_cnt].header = pose_stamped.header;
+    Pose pose;
+    pose.stamp = cur_kf->time_stamp;
+    pose.p = Eigen::Vector3d(P.x() + VISUALIZATION_SHIFT_X,
+                             P.y() + VISUALIZATION_SHIFT_Y,
+                             P.z());
+    pose.q = Q;
+    path[sequence_cnt].push_back(pose);
 
     if (SAVE_LOOP_PATH)
     {
@@ -233,11 +221,9 @@ void PoseGraph::addKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
             
         }
     }
-    //posegraph_visualization->add_pose(P + Vector3d(VISUALIZATION_SHIFT_X, VISUALIZATION_SHIFT_Y, 0), Q);
 
-	keyframelist.push_back(cur_kf);
-    publish();
-	m_keyframelist.unlock();
+    keyframelist.push_back(cur_kf);
+    m_keyframelist.unlock();
 }
 
 
@@ -270,18 +256,13 @@ void PoseGraph::loadKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
     Matrix3d R;
     cur_kf->getPose(P, R);
     Quaterniond Q{R};
-    geometry_msgs::PoseStamped pose_stamped;
-    pose_stamped.header.stamp = ros::Time(cur_kf->time_stamp);
-    pose_stamped.header.frame_id = "world";
-    pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
-    pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
-    pose_stamped.pose.position.z = P.z();
-    pose_stamped.pose.orientation.x = Q.x();
-    pose_stamped.pose.orientation.y = Q.y();
-    pose_stamped.pose.orientation.z = Q.z();
-    pose_stamped.pose.orientation.w = Q.w();
-    base_path.poses.push_back(pose_stamped);
-    base_path.header = pose_stamped.header;
+    Pose pose;
+    pose.stamp = cur_kf->time_stamp;
+    pose.p = Eigen::Vector3d(P.x() + VISUALIZATION_SHIFT_X,
+                             P.y() + VISUALIZATION_SHIFT_Y,
+                             P.z());
+    pose.q = Q;
+    base_path.push_back(pose);
 
     //draw local connection
     if (SHOW_S_EDGE)
@@ -313,7 +294,6 @@ void PoseGraph::loadKeyFrame(KeyFrame* cur_kf, bool flag_detect_loop)
     */
 
     keyframelist.push_back(cur_kf);
-    //publish();
     m_keyframelist.unlock();
 }
 
@@ -785,9 +765,9 @@ void PoseGraph::updatePath()
     list<KeyFrame*>::iterator it;
     for (int i = 1; i <= sequence_cnt; i++)
     {
-        path[i].poses.clear();
+        path[i].clear();
     }
-    base_path.poses.clear();
+    base_path.clear();
     posegraph_visualization->reset();
 
     if (SAVE_LOOP_PATH)
@@ -805,25 +785,20 @@ void PoseGraph::updatePath()
         Q = R;
 //        printf("path p: %f, %f, %f\n",  P.x(),  P.z(),  P.y() );
 
-        geometry_msgs::PoseStamped pose_stamped;
-        pose_stamped.header.stamp = ros::Time((*it)->time_stamp);
-        pose_stamped.header.frame_id = "world";
-        pose_stamped.pose.position.x = P.x() + VISUALIZATION_SHIFT_X;
-        pose_stamped.pose.position.y = P.y() + VISUALIZATION_SHIFT_Y;
-        pose_stamped.pose.position.z = P.z();
-        pose_stamped.pose.orientation.x = Q.x();
-        pose_stamped.pose.orientation.y = Q.y();
-        pose_stamped.pose.orientation.z = Q.z();
-        pose_stamped.pose.orientation.w = Q.w();
+        Pose pose;
+        pose.stamp = (*it)->time_stamp;
+        pose.p = Eigen::Vector3d(P.x() + VISUALIZATION_SHIFT_X,
+                                 P.y() + VISUALIZATION_SHIFT_Y,
+                                 P.z());
+        pose.q = Q;
+
         if((*it)->sequence == 0)
         {
-            base_path.poses.push_back(pose_stamped);
-            base_path.header = pose_stamped.header;
+            base_path.push_back(pose);
         }
         else
         {
-            path[(*it)->sequence].poses.push_back(pose_stamped);
-            path[(*it)->sequence].header = pose_stamped.header;
+            path[(*it)->sequence].push_back(pose);
         }
 
         if (SAVE_LOOP_PATH)
@@ -890,7 +865,7 @@ void PoseGraph::updatePath()
         }
 
     }
-    publish();
+    // publishing replaced by consumeVisualizationMarkers()
     m_keyframelist.unlock();
 }
 
@@ -1059,10 +1034,6 @@ void PoseGraph::loadPoseGraph()
 
         KeyFrame* keyframe = new KeyFrame(time_stamp, index, VIO_T, VIO_R, PG_T, PG_R, image, loop_index, loop_info, keypoints, keypoints_norm, brief_descriptors);
         loadKeyFrame(keyframe, 0);
-        if (cnt % 20 == 0)
-        {
-            publish();
-        }
         cnt++;
     }
     fclose (pFile);
@@ -1070,18 +1041,7 @@ void PoseGraph::loadPoseGraph()
     base_sequence = 0;
 }
 
-void PoseGraph::publish()
+std::vector<CameraPoseVisualization::Marker> PoseGraph::consumeVisualizationMarkers()
 {
-    for (int i = 1; i <= sequence_cnt; i++)
-    {
-        //if (sequence_loop[i] == true || i == base_sequence)
-        if (1 || i == base_sequence)
-        {
-            pub_pg_path.publish(path[i]);
-            pub_path[i].publish(path[i]);
-            posegraph_visualization->publish_by(pub_pose_graph, path[sequence_cnt].header);
-        }
-    }
-    pub_base_path.publish(base_path);
-    //posegraph_visualization->publish_by(pub_pose_graph, path[sequence_cnt].header);
+    return posegraph_visualization->consumeMarkers();
 }

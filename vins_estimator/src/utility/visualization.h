@@ -25,7 +25,3 @@ void pubOdometry(const Estimator &estimator);
 // the estimator's UDP port (see main.cpp which populates pub_addr).
 void pubKeyframeUdp(const Estimator &estimator);
 void pubExtrinsicUdp(const Estimator &estimator, double stamp);
-// UDP payloads intended to carry the same *content* loop_fusion consumed from
-// ROS topics:
-void pubKeyframeUdp(const Estimator &estimator);
-void pubExtrinsicUdp(const Estimator &estimator, double stamp);
